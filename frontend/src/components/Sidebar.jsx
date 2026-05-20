@@ -6,16 +6,17 @@ import {
 import { useAuth } from '../context/AuthContext';
 import PPDBadge from './PPDBadge';
 
-const nav = [
-  { to: '/',          label: 'Dashboard',     icon: LayoutDashboard },
-  { to: '/locker',    label: 'Evidence Locker', icon: Archive },
-  { to: '/treasury',  label: 'Treasury',      icon: Banknote },
-  { to: '/reports',   label: 'Reports',       icon: FileBarChart2 },
-  { to: '/history',   label: 'History',       icon: History },
+const baseNav = [
+  { to: '/',         label: 'Dashboard',       icon: LayoutDashboard, adminOnly: false },
+  { to: '/locker',   label: 'Evidence Locker', icon: Archive,         adminOnly: false },
+  { to: '/treasury', label: 'Treasury',        icon: Banknote,        adminOnly: true  },
+  { to: '/reports',  label: 'Reports',         icon: FileBarChart2,   adminOnly: false },
+  { to: '/history',  label: 'History',         icon: History,         adminOnly: false },
 ];
 
 export default function Sidebar() {
   const { user, isAdmin, logout } = useAuth();
+  const nav = baseNav.filter((n) => !n.adminOnly || isAdmin);
 
   return (
     <aside className="w-64 shrink-0 border-r border-line bg-navy-950/70 backdrop-blur-md flex flex-col z-10">

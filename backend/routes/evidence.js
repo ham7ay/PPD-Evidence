@@ -5,6 +5,9 @@ const { toWhite } = require('../utils/currency');
 
 const COL = 'evidence_locker';
 
+const normName  = (s) => String(s || '').trim().toLowerCase();
+const normBatch = (s) => String(s || '').trim().toLowerCase();
+
 router.get('/', requireAuth, async (req, res) => {
   try {
     const { officer, batchCode, itemName, dateFrom, dateTo, evidenceId } = req.query;
@@ -42,9 +45,15 @@ router.post('/', requireAuth, async (req, res) => {
     const blackMoneyValue = item.blackMoneyValue * qty;
     const whiteMoneyValue = toWhite(blackMoneyValue);
 
+    // Keep what the user typed as display, plus a lowercase key for grouping
+    const displayName  = String(officerName).trim();
+    const displayBatch = String(batchCode).trim();
+
     const data = {
-      officerName,
-      batchCode,
+      officerName: displayName,
+      batchCode: displayBatch,
+      officerKey: normName(displayName),
+      batchKey: normBatch(displayBatch),
       officerUid: req.user.uid,
       itemId,
       itemName: item.name,
@@ -57,8 +66,10 @@ router.post('/', requireAuth, async (req, res) => {
     const ref = await db.collection(COL).add(data);
 
     const txRef = await db.collection('treasury_transactions').add({
-      officerName,
-      batchCode,
+      officerName: displayName,
+      batchCode: displayBatch,
+      officerKey: normName(displayName),
+      batchKey: normBatch(displayBatch),
       officerUid: req.user.uid,
       amount: whiteMoneyValue,
       actionType: 'Added',
@@ -89,8 +100,6 @@ router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Wipe ALL evidence + ALL treasury transactions in one go.
-// Items catalogue and officers/users are untouched.
 router.post('/reset-all', requireAuth, requireAdmin, async (req, res) => {
   try {
     const [evSnap, txSnap] = await Promise.all([

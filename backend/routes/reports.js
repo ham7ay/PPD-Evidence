@@ -2,6 +2,8 @@ const router = require('express').Router();
 const { db } = require('../config/firebase');
 const { requireAuth } = require('../middleware/auth');
 
+const norm = (s) => String(s || '').trim().toLowerCase();
+
 router.get('/summary', requireAuth, async (req, res) => {
   try {
     const [lockerSnap, treasurySnap, itemsSnap] = await Promise.all([
@@ -21,8 +23,18 @@ router.get('/summary', requireAuth, async (req, res) => {
       totalWhite += e.whiteMoneyValue || 0;
       totalItems += e.quantity || 0;
 
-      const k = `${e.officerName}|${e.batchCode}`;
-      byOfficer[k] = byOfficer[k] || { officerName: e.officerName, batchCode: e.batchCode, items: 0, black: 0, white: 0 };
+      // Group by normalized key — handles legacy data without officerKey
+      const keyName  = e.officerKey || norm(e.officerName);
+      const keyBatch = e.batchKey   || norm(e.batchCode);
+      const k = `${keyName}|${keyBatch}`;
+      if (!byOfficer[k]) {
+        // Use the first-seen display version (whatever was typed) as the canonical label
+        byOfficer[k] = {
+          officerName: e.officerName,
+          batchCode: e.batchCode,
+          items: 0, black: 0, white: 0,
+        };
+      }
       byOfficer[k].items += e.quantity || 0;
       byOfficer[k].black += e.blackMoneyValue || 0;
       byOfficer[k].white += e.whiteMoneyValue || 0;

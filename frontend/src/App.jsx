@@ -39,7 +39,7 @@ function AuthedRoutes() {
       <Routes>
         <Route path="/"          element={<Dashboard />} />
         <Route path="/locker"    element={<Locker />} />
-        <Route path="/treasury"  element={<Treasury />} />
+        <Route path="/treasury"  element={<Protected adminOnly><Treasury /></Protected>} />
         <Route path="/reports"   element={<Reports />} />
         <Route path="/history"   element={<History />} />
         <Route path="/admin"     element={<Protected adminOnly><Admin /></Protected>} />
