@@ -8,6 +8,12 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+    function isApproved() {
+      return isAuthed() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved'
+              || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
 
     match /users/{uid} {
       allow read: if isAuthed();
@@ -17,19 +23,19 @@ service cloud.firestore {
     }
 
     match /evidence_items/{itemId} {
-      allow read: if isAuthed();
+      allow read: if isApproved();
       allow write: if isAdmin();
     }
 
     match /evidence_locker/{entryId} {
-      allow read: if isAuthed();
-      allow create: if isAuthed();
+      allow read: if isApproved();
+      allow create: if isApproved();
       allow update, delete: if isAdmin();
     }
 
     match /treasury_transactions/{txId} {
-      allow read: if isAuthed();
-      allow create: if isAuthed();
+      allow read: if isApproved();
+      allow create: if isApproved();
       allow update, delete: if isAdmin();
     }
   }

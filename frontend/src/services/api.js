@@ -24,22 +24,20 @@ async function req(method, path, body) {
 }
 
 export const api = {
-  // auth
   register: (data) => req('POST', '/api/auth/register', data),
   me:       ()     => req('GET',  '/api/auth/me'),
   updateMe: (data) => req('PUT',  '/api/auth/me', data),
   officers: ()     => req('GET',  '/api/auth/officers'),
   setRole:  (uid, role) => req('PUT', `/api/auth/officers/${uid}/role`, { role }),
+  approveOfficer: (uid) => req('PUT', `/api/auth/officers/${uid}/approve`),
   deleteOfficer: (uid) => req('DELETE', `/api/auth/officers/${uid}`),
 
-  // items
   items:       () => req('GET', '/api/items'),
   createItem:  (data) => req('POST', '/api/items', data),
   updateItem:  (id, data) => req('PUT', `/api/items/${id}`, data),
   deleteItem:  (id) => req('DELETE', `/api/items/${id}`),
   seedItems:   () => req('POST', '/api/items/seed'),
 
-  // evidence
   evidence: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return req('GET', `/api/evidence${qs ? '?' + qs : ''}`);
@@ -48,11 +46,9 @@ export const api = {
   deleteEvidence: (id) => req('DELETE', `/api/evidence/${id}`),
   resetAllData: () => req('POST', '/api/evidence/reset-all'),
 
-  // treasury
   treasury: ()       => req('GET',  '/api/treasury'),
   addTreasury: (data)=> req('POST', '/api/treasury', data),
   resetTreasury: ()  => req('POST', '/api/treasury/reset'),
 
-  // reports
   summary: () => req('GET', '/api/reports/summary'),
 };

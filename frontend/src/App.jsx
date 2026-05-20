@@ -11,12 +11,18 @@ import Treasury from './pages/Treasury';
 import Reports from './pages/Reports';
 import History from './pages/History';
 import Admin from './pages/Admin';
+import PendingApproval from './pages/PendingApproval';
 
 function Protected({ children, adminOnly = false }) {
-  const { firebaseUser, isAdmin, loading } = useAuth();
+  const { firebaseUser, user, isAdmin, loading } = useAuth();
   const loc = useLocation();
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loading label="INITIALIZING"/></div>;
   if (!firebaseUser) return <Navigate to="/login" state={{ from: loc }} replace />;
+
+  // Block any access for users who are not approved (admins are always approved).
+  const approved = user?.status === 'approved' || user?.role === 'admin';
+  if (!approved) return <PendingApproval />;
+
   if (adminOnly && !isAdmin) return <Navigate to="/" replace />;
   return children;
 }

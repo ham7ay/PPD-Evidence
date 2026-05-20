@@ -2,7 +2,6 @@ const router = require('express').Router();
 const { db, auth } = require('../config/firebase');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 
-// Called by frontend right after Firebase Auth registration to create the user doc
 router.post('/register', requireAuth, async (req, res) => {
   try {
     const { name, batchCode } = req.body;
@@ -12,11 +11,12 @@ router.post('/register', requireAuth, async (req, res) => {
     const snap = await userRef.get();
     if (snap.exists) return res.json({ ok: true, user: snap.data() });
 
-    // Bootstrap: the FIRST user ever to register becomes admin.
-    // Everyone else starts as officer; promotion is manual via the admin panel.
+    // Bootstrap: first user ever becomes auto-approved admin.
+    // Everyone else is pending, awaiting admin approval.
     const usersSnap = await db.collection('users').limit(1).get();
     const isFirstUser = usersSnap.empty;
-    const role = isFirstUser ? 'admin' : 'officer';
+    const role   = isFirstUser ? 'admin'    : 'officer';
+    const status = isFirstUser ? 'approved' : 'pending';
 
     const data = {
       uid,
@@ -24,6 +24,7 @@ router.post('/register', requireAuth, async (req, res) => {
       name: name || email.split('@')[0],
       batchCode: batchCode || '',
       role,
+      status,
       createdAt: Date.now(),
     };
     await userRef.set(data);
@@ -39,6 +40,7 @@ router.get('/me', requireAuth, async (req, res) => {
 
 router.put('/me', requireAuth, async (req, res) => {
   try {
+    if (!req.isApproved) return res.status(403).json({ error: 'Account pending approval' });
     const { name, batchCode } = req.body;
     const update = {};
     if (name !== undefined) update.name = name;
@@ -50,7 +52,7 @@ router.put('/me', requireAuth, async (req, res) => {
   }
 });
 
-router.get('/officers', requireAuth, async (req, res) => {
+router.get('/officers', requireAuth, requireAdmin, async (req, res) => {
   const snap = await db.collection('users').orderBy('createdAt', 'desc').get();
   res.json({ officers: snap.docs.map((d) => d.data()) });
 });
@@ -66,6 +68,21 @@ router.put('/officers/:uid/role', requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
+// Approve a pending registration
+router.put('/officers/:uid/approve', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await db.collection('users').doc(req.params.uid).update({
+      status: 'approved',
+      approvedAt: Date.now(),
+      approvedBy: req.user.uid,
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Reject pending registration — deletes Firestore doc AND Firebase Auth user
 router.delete('/officers/:uid', requireAuth, requireAdmin, async (req, res) => {
   try {
     await db.collection('users').doc(req.params.uid).delete();

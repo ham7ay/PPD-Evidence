@@ -12,6 +12,7 @@ async function requireAuth(req, res, next) {
     const userDoc = await db.collection('users').doc(decoded.uid).get();
     req.userData = userDoc.exists ? userDoc.data() : null;
     req.isAdmin = req.userData?.role === 'admin';
+    req.isApproved = req.userData?.status === 'approved' || req.userData?.role === 'admin';
     next();
   } catch (e) {
     console.error('Auth error:', e.message);
@@ -24,4 +25,9 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireAdmin };
+function requireApproved(req, res, next) {
+  if (!req.isApproved) return res.status(403).json({ error: 'Account pending approval' });
+  next();
+}
+
+module.exports = { requireAuth, requireAdmin, requireApproved };

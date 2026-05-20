@@ -3,8 +3,8 @@ import Topbar from '../components/Topbar';
 import Loading from '../components/Loading';
 import { Modal, ConfirmModal } from '../components/Modal';
 import { api } from '../services/api';
-import { fmt } from '../utils/helpers';
-import { Plus, Edit2, Trash2, Database, RotateCcw, Shield, ShieldOff, Image as ImageIcon } from 'lucide-react';
+import { fmt, fmtDate } from '../utils/helpers';
+import { Plus, Edit2, Trash2, Database, RotateCcw, Shield, ShieldOff, Image as ImageIcon, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import {
@@ -34,6 +34,9 @@ export default function Admin() {
 
   useEffect(() => { load(); }, []);
 
+  const pending  = officers.filter((o) => o.status === 'pending');
+  const approved = officers.filter((o) => o.status !== 'pending');
+
   const openCreate = () => { setEditing('new'); setForm(EMPTY); };
   const openEdit = (it) => {
     setEditing(it.id);
@@ -49,13 +52,8 @@ export default function Admin() {
   const saveItem = async (e) => {
     e.preventDefault();
     try {
-      if (editing === 'new') {
-        await api.createItem(form);
-        toast.success('Item created');
-      } else {
-        await api.updateItem(editing, form);
-        toast.success('Item updated');
-      }
+      if (editing === 'new') { await api.createItem(form); toast.success('Item created'); }
+      else { await api.updateItem(editing, form); toast.success('Item updated'); }
       setEditing(null); load();
     } catch (e) { toast.error(e.message); }
   };
@@ -82,7 +80,7 @@ export default function Admin() {
 
   const resetAll = () => setConfirm({
     title: 'Wipe All Activity',
-    message: 'This will permanently delete ALL evidence locker entries AND ALL treasury transactions. Items catalogue and officers are kept. Dashboard, History, and Treasury will be empty. Continue?',
+    message: 'This will permanently delete ALL evidence locker entries AND ALL treasury transactions. Items catalogue and officers are kept.',
     confirmText: 'Wipe Everything', danger: true,
     onConfirm: async () => {
       try {
@@ -99,6 +97,26 @@ export default function Admin() {
     confirmText: 'Reset', danger: true,
     onConfirm: async () => {
       try { await api.resetTreasury(); toast.success('Treasury reset'); load(); }
+      catch (e) { toast.error(e.message); }
+    },
+  });
+
+  const approveOfficer = (o) => setConfirm({
+    title: 'Approve Officer',
+    message: `Grant access to ${o.name} (${o.email})? They'll be able to sign in immediately.`,
+    confirmText: 'Approve',
+    onConfirm: async () => {
+      try { await api.approveOfficer(o.uid); toast.success(`${o.name} approved`); load(); }
+      catch (e) { toast.error(e.message); }
+    },
+  });
+
+  const rejectOfficer = (o) => setConfirm({
+    title: 'Reject Registration',
+    message: `Permanently delete pending registration for ${o.name} (${o.email})? Their login will be removed entirely.`,
+    confirmText: 'Reject', danger: true,
+    onConfirm: async () => {
+      try { await api.deleteOfficer(o.uid); toast.success('Registration rejected'); load(); }
       catch (e) { toast.error(e.message); }
     },
   });
@@ -134,6 +152,7 @@ export default function Admin() {
 
   const tabs = [
     { id: 'items',     label: 'Items' },
+    { id: 'pending',   label: 'Pending', badge: pending.length },
     { id: 'officers',  label: 'Officers' },
     { id: 'analytics', label: 'Analytics' },
     { id: 'danger',    label: 'Danger Zone' },
@@ -148,11 +167,16 @@ export default function Admin() {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`px-5 py-2.5 font-display tracking-widest text-sm transition border-b-2 -mb-px ${
+              className={`px-5 py-2.5 font-display tracking-widest text-sm transition border-b-2 -mb-px relative ${
                 tab === t.id ? 'text-gold-400 border-gold-500' : 'text-slate-500 border-transparent hover:text-slate-200'
               }`}
             >
               {t.label.toUpperCase()}
+              {t.badge > 0 && (
+                <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-gold-500 text-navy-950 text-[10px] font-bold">
+                  {t.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -203,17 +227,54 @@ export default function Admin() {
           </motion.div>
         )}
 
+        {tab === 'pending' && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="panel p-6">
+            <h3 className="font-display font-semibold text-gold-400 tracking-wide mb-4">
+              Pending Registrations ({pending.length})
+            </h3>
+            {pending.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 italic">
+                No pending requests. New registrations will appear here.
+              </div>
+            ) : (
+              <table className="tactical">
+                <thead>
+                  <tr><th>Name</th><th>Email</th><th>Batch</th><th>Requested</th><th className="text-right">Action</th></tr>
+                </thead>
+                <tbody>
+                  {pending.map((o) => (
+                    <tr key={o.uid}>
+                      <td className="text-slate-200 font-display">{o.name}</td>
+                      <td className="font-mono text-xs text-slate-400">{o.email}</td>
+                      <td className="font-mono text-xs">#{o.batchCode || '—'}</td>
+                      <td className="font-mono text-xs text-slate-500">{fmtDate(o.createdAt)}</td>
+                      <td className="text-right">
+                        <button onClick={() => approveOfficer(o)} className="btn-ghost !py-1 !px-2 mr-2 inline-flex items-center gap-1 !text-green-400 !border-green-500/40 hover:!border-green-500" title="Approve">
+                          <Check size={12}/> Approve
+                        </button>
+                        <button onClick={() => rejectOfficer(o)} className="btn-danger !py-1 !px-2 inline-flex items-center gap-1" title="Reject">
+                          <X size={12}/> Reject
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </motion.div>
+        )}
+
         {tab === 'officers' && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="panel p-6">
             <h3 className="font-display font-semibold text-gold-400 tracking-wide mb-4">
-              Officers ({officers.length})
+              Approved Officers ({approved.length})
             </h3>
             <table className="tactical">
               <thead>
                 <tr><th>Name</th><th>Email</th><th>Batch</th><th>Role</th><th></th></tr>
               </thead>
               <tbody>
-                {officers.map((o) => (
+                {approved.map((o) => (
                   <tr key={o.uid}>
                     <td className="text-slate-200 font-display">{o.name}</td>
                     <td className="font-mono text-xs text-slate-400">{o.email}</td>
@@ -239,9 +300,7 @@ export default function Admin() {
         {tab === 'analytics' && summary && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             <div className="panel p-6">
-              <h3 className="font-display font-semibold text-gold-400 tracking-wide mb-4">
-                Top Items by Quantity
-              </h3>
+              <h3 className="font-display font-semibold text-gold-400 tracking-wide mb-4">Top Items by Quantity</h3>
               <div style={{ width: '100%', height: 300 }}>
                 <ResponsiveContainer>
                   <BarChart data={summary.byItem.slice(0, 10)} layout="vertical">
@@ -256,9 +315,7 @@ export default function Admin() {
             </div>
 
             <div className="panel p-6">
-              <h3 className="font-display font-semibold text-gold-400 tracking-wide mb-4">
-                Officer Performance
-              </h3>
+              <h3 className="font-display font-semibold text-gold-400 tracking-wide mb-4">Officer Performance</h3>
               <div style={{ width: '100%', height: 300 }}>
                 <ResponsiveContainer>
                   <BarChart data={summary.byOfficer.slice(0, 8)}>
@@ -277,14 +334,12 @@ export default function Admin() {
 
         {tab === 'danger' && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="panel p-6 border-red-500/30">
-            <h3 className="font-display font-semibold text-red-400 tracking-wide mb-4">
-              Danger Zone
-            </h3>
+            <h3 className="font-display font-semibold text-red-400 tracking-wide mb-4">Danger Zone</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between p-4 border border-red-500/20 rounded-sm">
                 <div>
                   <div className="font-display font-semibold text-slate-100">Wipe All Activity</div>
-                  <div className="text-sm text-slate-500">Deletes all evidence locker entries AND all treasury transactions. Items catalogue and officers are kept. Dashboard resets to zero.</div>
+                  <div className="text-sm text-slate-500">Deletes all evidence locker entries AND all treasury transactions. Items catalogue and officers are kept.</div>
                 </div>
                 <button className="btn-danger flex items-center gap-2" onClick={resetAll}>
                   <RotateCcw size={14}/> Wipe Activity
@@ -304,7 +359,6 @@ export default function Admin() {
         )}
       </div>
 
-      {/* Item form modal */}
       <Modal open={!!editing} onClose={() => setEditing(null)} title={editing === 'new' ? 'New Evidence Item' : 'Edit Item'}>
         <form onSubmit={saveItem} className="space-y-3">
           <div>
@@ -327,7 +381,7 @@ export default function Admin() {
           </div>
           <div>
             <label className="label">Image URL</label>
-            <input className="input" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://... (right-click image on web → Copy image address)"/>
+            <input className="input" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..."/>
             {form.imageUrl && (
               <div className="mt-2 flex items-center gap-3 p-2 border border-line rounded-sm">
                 <img src={form.imageUrl} alt="preview" className="w-16 h-16 object-cover rounded-sm" onError={(e) => { e.target.style.opacity = 0.2; }}/>
